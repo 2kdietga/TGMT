@@ -9,6 +9,8 @@ from tempfile import TemporaryDirectory
 from django.conf import settings
 from gradio_client import Client, handle_file
 from PIL import Image
+import os
+import inspect
 
 
 # Bản demo: tối đa một lượt gọi API mỗi tiến trình.
@@ -66,12 +68,25 @@ def predict_image(image):
             # Phần tiền xử lý model thuộc API Hugging Face.
             image.save(input_path, format="PNG")
 
+            token = os.environ.get("HF_TOKEN")
+
+            if not token:
+                raise RuntimeError("Chưa cấu hình biến môi trường HF_TOKEN.")
+
+            # Tương thích cả phiên bản Gradio Client cũ và mới.
+            token_parameter = (
+                "token"
+                if "token" in inspect.signature(Client).parameters
+                else "hf_token"
+            )
+
             client = Client(
                 settings.HF_API_URL,
                 verbose=False,
                 download_files=str(output_dir),
                 max_workers=1,
                 httpx_kwargs={"timeout": 120.0},
+                **{token_parameter: token},
             )
 
             response = client.predict(
