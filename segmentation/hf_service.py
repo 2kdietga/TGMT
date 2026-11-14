@@ -33,6 +33,52 @@ def timed_stage(timings, name, request_id):
 
 
 _prediction_slot = threading.BoundedSemaphore(1)
+_cached_client = None
+_cached_client_key = None
+
+
+def discard_client():
+    global _cached_client, _cached_client_key
+    client = _cached_client
+    _cached_client = None
+    _cached_client_key = None
+    if client is not None:
+        client.close()
+        for name in ("executor", "helper_executor", "stream_executor"):
+            executor = getattr(client, name, None)
+            if executor is not None:
+                executor.shutdown(wait=False, cancel_futures=True)
+
+
+def get_client(output_dir, request_id):
+    # Called only while holding _prediction_slot: output paths cannot overlap.
+    global _cached_client, _cached_client_key
+    token = os.environ.get("HF_TOKEN")
+    if not token:
+        raise RuntimeError("HF_TOKEN is not configured.")
+    key = (os.getpid(), settings.HF_API_URL, token)
+    reused = _cached_client is not None and _cached_client_key == key
+    if not reused:
+        discard_client()
+        token_parameter = (
+            "token" if "token" in inspect.signature(Client).parameters else "hf_token"
+        )
+        _cached_client = Client(
+            settings.HF_API_URL,
+            verbose=False,
+            download_files=str(output_dir),
+            max_workers=1,
+            httpx_kwargs={"timeout": 120.0},
+            **{token_parameter: token},
+        )
+        _cached_client_key = key
+    else:
+        _cached_client.reset_session()
+        # gradio_client 2.7.2 downloads using client.output_dir.
+        _cached_client.output_dir = str(output_dir)
+        _cached_client.download_files = str(output_dir)
+    logger.info("prediction request=%s client_reused=%s", request_id, reused)
+    return _cached_client
 
 
 class ServiceBusyError(Exception):
@@ -91,33 +137,18 @@ def predict_image(image, *, request_id="-", timings=None):
             logger.info("prediction request=%s input_width=%s input_height=%s png_bytes=%s",
                         request_id, image.width, image.height, input_path.stat().st_size)
 
-            token = os.environ.get("HF_TOKEN")
-
-            if not token:
-                raise RuntimeError("Chưa cấu hình biến môi trường HF_TOKEN.")
-
-            # Tương thích cả phiên bản Gradio Client cũ và mới.
-            token_parameter = (
-                "token"
-                if "token" in inspect.signature(Client).parameters
-                else "hf_token"
-            )
-
             with timed_stage(timings, "client_init", request_id):
-                client = Client(
-                    settings.HF_API_URL,
-                    verbose=False,
-                    download_files=str(output_dir),
-                    max_workers=1,
-                    httpx_kwargs={"timeout": 120.0},
-                    **{token_parameter: token},
-                )
+                client = get_client(output_dir, request_id)
 
-            with timed_stage(timings, "predict_upload_queue_download", request_id):
-                response = client.predict(
-                    image=handle_file(str(input_path)),
-                    api_name="/predict",
-                )
+            try:
+                with timed_stage(timings, "predict_upload_queue_download", request_id):
+                    response = client.predict(
+                        image=handle_file(str(input_path)),
+                        api_name="/predict",
+                    )
+            except Exception:
+                discard_client()
+                raise
 
             if not isinstance(response, (tuple, list)) or len(response) != 3:
                 raise ValueError(
