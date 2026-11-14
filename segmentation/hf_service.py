@@ -1,5 +1,7 @@
 import base64
 import json
+import logging
+from contextlib import contextmanager
 import threading
 import time
 from io import BytesIO
@@ -15,6 +17,21 @@ import inspect
 
 # Bản demo: tối đa một lượt gọi API mỗi tiến trình.
 # Request khác sẽ nhận thông báo bận thay vì dồn vào hàng đợi local.
+logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def timed_stage(timings, name, request_id):
+    started = time.perf_counter()
+    logger.info("prediction request=%s stage=%s started", request_id, name)
+    try:
+        yield
+    finally:
+        timings[name] = round((time.perf_counter() - started) * 1000, 1)
+        logger.info("prediction request=%s stage=%s duration_ms=%.1f",
+                    request_id, name, timings[name])
+
+
 _prediction_slot = threading.BoundedSemaphore(1)
 
 
@@ -47,7 +64,9 @@ def read_output_image(path):
         return source.copy()
 
 
-def predict_image(image):
+def predict_image(image, *, request_id="-", timings=None):
+    if timings is None:
+        timings = {}
     if not _prediction_slot.acquire(blocking=False):
         raise ServiceBusyError(
             "Hệ thống đang xử lý một ảnh khác. Bạn thử lại sau ít giây nhé."
@@ -66,7 +85,11 @@ def predict_image(image):
 
             # Chuẩn hóa định dạng, không resize hoặc normalize cho model.
             # Phần tiền xử lý model thuộc API Hugging Face.
-            image.save(input_path, format="PNG")
+            with timed_stage(timings, "prepare_png", request_id):
+                image.save(input_path, format="PNG")
+
+            logger.info("prediction request=%s input_width=%s input_height=%s png_bytes=%s",
+                        request_id, image.width, image.height, input_path.stat().st_size)
 
             token = os.environ.get("HF_TOKEN")
 
@@ -80,19 +103,21 @@ def predict_image(image):
                 else "hf_token"
             )
 
-            client = Client(
-                settings.HF_API_URL,
-                verbose=False,
-                download_files=str(output_dir),
-                max_workers=1,
-                httpx_kwargs={"timeout": 120.0},
-                **{token_parameter: token},
-            )
+            with timed_stage(timings, "client_init", request_id):
+                client = Client(
+                    settings.HF_API_URL,
+                    verbose=False,
+                    download_files=str(output_dir),
+                    max_workers=1,
+                    httpx_kwargs={"timeout": 120.0},
+                    **{token_parameter: token},
+                )
 
-            response = client.predict(
-                image=handle_file(str(input_path)),
-                api_name="/predict",
-            )
+            with timed_stage(timings, "predict_upload_queue_download", request_id):
+                response = client.predict(
+                    image=handle_file(str(input_path)),
+                    api_name="/predict",
+                )
 
             if not isinstance(response, (tuple, list)) or len(response) != 3:
                 raise ValueError(
@@ -101,48 +126,53 @@ def predict_image(image):
 
             mask_path, overlay_path, info = response
 
-            mask = read_output_image(mask_path).convert("L")
-            overlay = read_output_image(overlay_path).convert("RGB")
+            with timed_stage(timings, "postprocess", request_id):
+                mask = read_output_image(mask_path).convert("L")
+                overlay = read_output_image(overlay_path).convert("RGB")
 
-            # Tính diện tích từ mask trắng/đen API trả về.
-            # Giả định: trắng là vùng tổn thương, đen là nền.
-            histogram = mask.histogram()
-            foreground_pixels = sum(histogram[128:])
-            total_pixels = mask.width * mask.height
+                # Tính diện tích từ mask trắng/đen API trả về.
+                # Giả định: trắng là vùng tổn thương, đen là nền.
+                histogram = mask.histogram()
+                foreground_pixels = sum(histogram[128:])
+                total_pixels = mask.width * mask.height
 
-            area_percent = 100 * foreground_pixels / total_pixels
+                area_percent = 100 * foreground_pixels / total_pixels
 
-            original = image.copy()
+                original = image.copy()
 
-            # Chỉ thu nhỏ bản hiển thị, sau khi API đã xử lý ảnh đầy đủ.
-            original.thumbnail((1200, 1200))
-            overlay.thumbnail((1200, 1200))
-            mask.thumbnail(
-                (1200, 1200),
-                resample=Image.Resampling.NEAREST,
-            )
+                # Chỉ thu nhỏ bản hiển thị, sau khi API đã xử lý ảnh đầy đủ.
+                original.thumbnail((1200, 1200))
+                overlay.thumbnail((1200, 1200))
+                mask.thumbnail(
+                    (1200, 1200),
+                    resample=Image.Resampling.NEAREST,
+                )
 
-            if isinstance(info, str):
-                try:
-                    info = json.loads(info)
-                except json.JSONDecodeError:
-                    pass
+                if isinstance(info, str):
+                    try:
+                        info = json.loads(info)
+                    except json.JSONDecodeError:
+                        pass
 
-            result = {
-                "original": to_data_url(original),
-                "mask": to_data_url(mask),
-                "overlay": to_data_url(overlay),
-                "area_percent": round(area_percent, 2),
-                "elapsed": round(time.perf_counter() - started, 2),
-                "info_json": json.dumps(
-                    info,
-                    ensure_ascii=False,
-                    indent=2,
-                    default=str,
-                ),
-            }
+            with timed_stage(timings, "encode_result", request_id):
+                result = {
+                    "original": to_data_url(original),
+                    "mask": to_data_url(mask),
+                    "overlay": to_data_url(overlay),
+                    "area_percent": round(area_percent, 2),
+                    "elapsed": round(time.perf_counter() - started, 2),
+                    "info_json": json.dumps(
+                        info,
+                        ensure_ascii=False,
+                        indent=2,
+                        default=str,
+                    ),
+                }
 
+            result["elapsed"] = round(time.perf_counter() - started, 2)
             return result
 
     finally:
+        timings["service_total"] = round((time.perf_counter() - started) * 1000, 1)
+        logger.info("prediction request=%s timings_ms=%s", request_id, json.dumps(timings))
         _prediction_slot.release()
