@@ -85,13 +85,16 @@ class ServiceBusyError(Exception):
     pass
 
 
-def to_data_url(image):
-    buffer = BytesIO()
-    image.save(buffer, format="PNG")
+def to_data_url(image, *, png_path=None):
+    # Reuse the normalized input PNG when the preview has not been resized.
+    if png_path is not None:
+        png_bytes = Path(png_path).read_bytes()
+    else:
+        buffer = BytesIO()
+        image.save(buffer, format="PNG", compress_level=3)
+        png_bytes = buffer.getvalue()
 
-    encoded = base64.b64encode(
-        buffer.getvalue()
-    ).decode("ascii")
+    encoded = base64.b64encode(png_bytes).decode("ascii")
 
     return f"data:image/png;base64,{encoded}"
 
@@ -132,7 +135,7 @@ def predict_image(image, *, request_id="-", timings=None):
             # Chuẩn hóa định dạng, không resize hoặc normalize cho model.
             # Phần tiền xử lý model thuộc API Hugging Face.
             with timed_stage(timings, "prepare_png", request_id):
-                image.save(input_path, format="PNG")
+                image.save(input_path, format="PNG", compress_level=3)
 
             logger.info("prediction request=%s input_width=%s input_height=%s png_bytes=%s",
                         request_id, image.width, image.height, input_path.stat().st_size)
@@ -187,7 +190,10 @@ def predict_image(image, *, request_id="-", timings=None):
 
             with timed_stage(timings, "encode_result", request_id):
                 result = {
-                    "original": to_data_url(original),
+                    "original": to_data_url(
+                        original,
+                        png_path=input_path if original.size == image.size else None,
+                    ),
                     "mask": to_data_url(mask),
                     "overlay": to_data_url(overlay),
                     "area_percent": round(area_percent, 2),

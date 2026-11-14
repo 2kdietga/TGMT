@@ -41,3 +41,30 @@ class ClientReuseTests(SimpleTestCase):
         self.assertIsNone(hf_service._cached_client)
         hf_service.get_client("second-output", "second")
         self.assertEqual(self.factory.call_count, 2)
+
+
+class ImageEncodingTests(SimpleTestCase):
+    def test_png_encoding_preserves_pixels(self):
+        import base64
+        from io import BytesIO
+        from PIL import Image
+        for mode in ("RGB", "L"):
+            image = Image.effect_noise((64, 48), 30).convert(mode)
+            url = hf_service.to_data_url(image)
+            decoded = Image.open(BytesIO(base64.b64decode(url.split(",", 1)[1])))
+            self.assertEqual(decoded.mode, image.mode)
+            self.assertEqual(decoded.size, image.size)
+            self.assertEqual(decoded.tobytes(), image.tobytes())
+
+    def test_existing_png_is_reused_without_encoding_again(self):
+        import base64
+        from io import BytesIO
+        from PIL import Image
+        image = Image.new("RGB", (16, 16), (30, 60, 90))
+        buffer = BytesIO()
+        image.save(buffer, format="PNG")
+        data = buffer.getvalue()
+        with patch.object(hf_service.Path, "read_bytes", return_value=data), patch.object(image, "save") as save:
+            url = hf_service.to_data_url(image, png_path="input.png")
+        save.assert_not_called()
+        self.assertEqual(base64.b64decode(url.split(",", 1)[1]), data)
