@@ -1,0 +1,869 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SkinScope · Phân vùng ảnh</title>
+
+    <style>
+      :root {
+        --blue: #4263eb;
+        --text: #1e293b;
+        --muted: #718096;
+        --border: #e3e9f2;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      [hidden] {
+        display: none !important;
+      }
+
+      body {
+        margin: 0;
+        background: #f4f7fc;
+        color: var(--text);
+        font-family: "Segoe UI", Arial, sans-serif;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      button:focus-visible,
+      a:focus-visible {
+        outline: 3px solid #a5b4fc;
+        outline-offset: 4px;
+      }
+
+      nav {
+        background: white;
+        border-bottom: 1px solid var(--border);
+        padding: 20px max(24px, calc((100vw - 1120px) / 2));
+        font-size: 22px;
+        font-weight: 750;
+        color: var(--blue);
+      }
+
+      nav span {
+        float: right;
+        font-size: 12px;
+        font-weight: 400;
+        color: var(--muted);
+        padding-top: 7px;
+      }
+
+      main {
+        max-width: 1120px;
+        margin: auto;
+        padding: 40px 24px;
+      }
+
+      .eyebrow {
+        color: var(--blue);
+        font-size: 12px;
+        letter-spacing: 2px;
+        font-weight: 700;
+      }
+
+      h1 {
+        font-size: clamp(28px, 4vw, 40px);
+        letter-spacing: -1.2px;
+        margin: 12px 0;
+      }
+
+      p {
+        color: var(--muted);
+        line-height: 1.8;
+      }
+      .intro {
+        max-width: 650px;
+        font-size: 14px;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 270px;
+        gap: 24px;
+        margin-top: 28px;
+        align-items: start;
+      }
+
+      .card {
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 24px;
+        box-shadow: 0 10px 35px #25385806;
+      }
+
+      h2 {
+        margin: 0 0 20px;
+        font-size: 18px;
+      }
+      h3 {
+        font-size: 14px;
+      }
+
+      .dropzone {
+        border: 2px dashed #cdd7eb;
+        border-radius: 15px;
+        text-align: center;
+        padding: 36px 18px;
+        background: #fafbff;
+        transition: 0.2s;
+      }
+
+      .dropzone.active {
+        border-color: var(--blue);
+        background: #eef2ff;
+      }
+
+      .symbol {
+        width: 60px;
+        height: 60px;
+        display: grid;
+        place-items: center;
+        margin: 0 auto 16px;
+        border-radius: 18px;
+        background: #eef2ff;
+        color: var(--blue);
+        font-size: 30px;
+      }
+
+      .dropzone strong {
+        display: block;
+        font-size: 17px;
+      }
+      .dropzone p {
+        font-size: 12px;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 12px 16px;
+        background: white;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        color: #42526b;
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+      }
+
+      .primary {
+        background: var(--blue);
+        border-color: var(--blue);
+        color: white;
+      }
+
+      .sources {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 14px;
+      }
+
+      .small {
+        font-size: 12px;
+      }
+
+      kbd {
+        background: #f1f4f9;
+        border: 1px solid #dce3ee;
+        padding: 2px 5px;
+        border-radius: 4px;
+        font: inherit;
+        font-size: 11px;
+      }
+
+      .preview {
+        margin-top: 20px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+      }
+
+      .preview img {
+        display: block;
+        width: 100%;
+        max-height: 340px;
+        object-fit: contain;
+        background: #eef2f7;
+      }
+
+      .filebar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+      }
+
+      #filename {
+        font-size: 12px;
+        overflow-wrap: anywhere;
+      }
+
+      .camera {
+        margin-top: 18px;
+        padding: 12px;
+        background: #182235;
+        border-radius: 14px;
+      }
+
+      video {
+        display: block;
+        width: 100%;
+        max-height: 350px;
+        border-radius: 8px;
+      }
+
+      .camera-actions {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      .submit {
+        width: 100%;
+        min-height: 48px;
+        margin-top: 20px;
+      }
+
+      #status {
+        margin-bottom: 0;
+        font-size: 12px;
+      }
+
+      .error {
+        background: #fff0f2;
+        color: #b83b54;
+        padding: 14px;
+        border-radius: 10px;
+        font-size: 13px;
+      }
+
+      aside .card {
+        margin-bottom: 18px;
+      }
+      aside p {
+        font-size: 12px;
+      }
+      .note {
+        background: #edf3ff;
+      }
+
+      .results {
+        margin-top: 28px;
+      }
+
+      .result-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .result-heading h2 {
+        margin: 0;
+      }
+
+      .metric {
+        padding: 10px 14px;
+        background: #edf8f5;
+        border-radius: 10px;
+        color: #167d68;
+        font-size: 13px;
+      }
+
+      .metric strong {
+        font-size: 22px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+        margin-top: 20px;
+      }
+
+      .output {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+
+      .output h3 {
+        margin: 14px;
+      }
+
+      .output img {
+        width: 100%;
+        aspect-ratio: 3 / 2;
+        object-fit: contain;
+        background: #eef2f7;
+        display: block;
+      }
+
+      .output a {
+        display: flex;
+        margin: 12px;
+      }
+      details {
+        margin-top: 20px;
+        font-size: 12px;
+      }
+      summary {
+        cursor: pointer;
+        color: var(--muted);
+      }
+
+      pre {
+        padding: 16px;
+        background: #f5f7fb;
+        border-radius: 10px;
+        overflow: auto;
+        max-height: 300px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      .footer {
+        text-align: center;
+        margin-top: 28px;
+        font-size: 11px;
+      }
+
+      @media (max-width: 800px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        .grid {
+          grid-template-columns: 1fr;
+        }
+        nav span {
+          display: none;
+        }
+        main {
+          padding: 28px 16px;
+        }
+        .card {
+          padding: 18px;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <nav>
+      SkinScope
+      <span>Phân vùng ảnh · Không cần tài khoản</span>
+    </nav>
+
+    <main>
+      <div class="eyebrow">TỪ ẢNH ĐẾN VÙNG DỰ ĐOÁN</div>
+      <h1>Phân vùng tổn thương da</h1>
+      <p class="intro">
+        Tải ảnh, dán từ clipboard hoặc chụp bằng camera. Xem mask và vùng dự
+        đoán trực tiếp trên ảnh của bạn.
+      </p>
+
+      <div class="layout">
+        <section class="card">
+          <h2>01 · Thêm ảnh</h2>
+
+          <form id="form" method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+
+            <input
+              id="input"
+              type="file"
+              name="image"
+              accept="image/jpeg,image/png,image/webp"
+              hidden
+            />
+
+            <div class="dropzone" id="dropzone">
+              <div class="symbol" aria-hidden="true">↑</div>
+              <strong>Kéo và thả ảnh vào đây</strong>
+              <p>
+                Hoặc nhấn <kbd>Ctrl</kbd> + <kbd>V</kbd> để dán ảnh <br />JPG,
+                PNG, WebP · Tối đa 10 MB
+              </p>
+              <button id="choose" type="button" class="button primary">
+                Chọn ảnh từ máy
+              </button>
+            </div>
+
+            <div class="sources">
+              <button id="paste" type="button" class="button">
+                Dán clipboard
+              </button>
+              <button id="openCamera" type="button" class="button">
+                Mở camera
+              </button>
+            </div>
+
+            <p class="small">
+              Chụp màn hình bằng <kbd>Win</kbd> + <kbd>Shift</kbd> +
+              <kbd>S</kbd>, rồi quay lại trang và dán ảnh.
+            </p>
+
+            <div class="camera" id="camera" hidden>
+              <video id="video" autoplay playsinline muted></video>
+              <div class="camera-actions">
+                <button id="capture" type="button" class="button primary">
+                  Chụp ảnh
+                </button>
+                <button id="closeCamera" type="button" class="button">
+                  Tắt camera
+                </button>
+              </div>
+            </div>
+
+            <canvas id="canvas" hidden></canvas>
+
+            <div class="preview" id="previewBox" hidden>
+              <img id="preview" alt="Ảnh đã chọn" />
+              <div class="filebar">
+                <span id="filename"></span>
+                <button id="remove" type="button" class="button">Xóa</button>
+              </div>
+            </div>
+
+            <button
+              id="submit"
+              class="button primary submit"
+              type="submit"
+              disabled
+            >
+              Phân vùng ảnh →
+            </button>
+
+            <p id="status" role="status" aria-live="polite">
+              Chọn một ảnh để bắt đầu.
+            </p>
+          </form>
+
+          {% if error %}
+          <p class="error" role="alert">{{ error }}</p>
+          {% endif %}
+        </section>
+
+        <aside>
+          <section class="card">
+            <h3>Nhận kết quả trong ba bước</h3>
+            <p><strong>1.</strong> Chọn, dán hoặc chụp ảnh.</p>
+            <p><strong>2.</strong> Nhấn Phân vùng ảnh.</p>
+            <p><strong>3.</strong> Xem và tải mask, ảnh kết quả.</p>
+          </section>
+
+          <section class="card note">
+            <h3>Về kết quả</h3>
+            <p>
+              Mask trắng biểu thị vùng được dự đoán. Công cụ không xác định tên
+              bệnh hay đưa ra chẩn đoán.
+            </p>
+            <p>
+              Khi nhấn Phân vùng ảnh, ảnh được gửi tới dịch vụ Hugging Face để
+              xử lý.
+            </p>
+          </section>
+        </aside>
+      </div>
+
+      {% if result %}
+      <section class="card results" id="results">
+        <div class="result-heading">
+          <h2>02 · Kết quả phân vùng</h2>
+          <div class="metric">
+            <strong>{{ result.area_percent }}%</strong> diện tích mask
+          </div>
+        </div>
+
+        <p class="small">
+          Thời gian xử lý qua API: {{ result.elapsed }} giây. Tỷ lệ diện tích
+          không phải độ chính xác hay xác suất mắc bệnh.
+        </p>
+
+        <div class="grid">
+          <article class="output">
+            <h3>Ảnh gốc</h3>
+            <img src="{{ result.original }}" alt="Ảnh gốc" />
+            <a
+              class="button"
+              href="{{ result.original }}"
+              download="original.png"
+            >
+              Tải ảnh gốc
+            </a>
+          </article>
+
+          <article class="output">
+            <h3>Mask phân vùng</h3>
+            <img src="{{ result.mask }}" alt="Mask phân vùng" />
+            <a class="button" href="{{ result.mask }}" download="mask.png">
+              Tải mask
+            </a>
+          </article>
+
+          <article class="output">
+            <h3>Vùng dự đoán</h3>
+            <img src="{{ result.overlay }}" alt="Ảnh tô vùng dự đoán" />
+            <a
+              class="button"
+              href="{{ result.overlay }}"
+              download="overlay.png"
+            >
+              Tải kết quả
+            </a>
+          </article>
+        </div>
+
+        <details>
+          <summary>Thông tin chi tiết từ API</summary>
+          <pre>{{ result.info_json }}</pre>
+        </details>
+      </section>
+      {% endif %}
+
+      <p class="footer">SkinScope · Công cụ thử nghiệm phân vùng ảnh</p>
+    </main>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const allowed = ["image/jpeg", "image/png", "image/webp"];
+
+      let selected = null;
+      let objectURL = null;
+      let stream = null;
+      let busy = false;
+      let cameraOpening = false;
+      let version = 0;
+
+      function status(message) {
+        $("status").textContent = message;
+      }
+
+      function stopCamera() {
+        if (stream) {
+          stream.getTracks().forEach((track) => track.stop());
+        }
+        stream = null;
+        $("video").srcObject = null;
+        $("camera").hidden = true;
+      }
+
+      function setInput(file) {
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        $("input").files = transfer.files;
+      }
+
+      async function acceptFile(file) {
+        if (!file || busy) return;
+
+        if (!allowed.includes(file.type)) {
+          status("Chỉ hỗ trợ JPG, PNG hoặc WebP.");
+          return;
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+          status("Ảnh vượt quá 10 MB.");
+          return;
+        }
+
+        const current = ++version;
+        const url = URL.createObjectURL(file);
+        const image = new Image();
+
+        try {
+          await new Promise((resolve, reject) => {
+            image.onload = resolve;
+            image.onerror = reject;
+            image.src = url;
+          });
+
+          if (current !== version || busy) {
+            URL.revokeObjectURL(url);
+            return;
+          }
+
+          if (image.naturalWidth * image.naturalHeight > 20_000_000) {
+            URL.revokeObjectURL(url);
+            status("Ảnh vượt quá 20 megapixel. Hãy giảm kích thước.");
+            return;
+          }
+
+          setInput(file);
+          selected = file;
+
+          if (objectURL) URL.revokeObjectURL(objectURL);
+          objectURL = url;
+
+          $("preview").src = url;
+          $("previewBox").hidden = false;
+          $("filename").textContent =
+            `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} MB`;
+
+          $("submit").disabled = false;
+          if ($("results")) $("results").hidden = true;
+
+          stopCamera();
+          status("Ảnh đã sẵn sàng. Nhấn Phân vùng ảnh.");
+        } catch (error) {
+          URL.revokeObjectURL(url);
+          if (current === version)
+            status("Không đọc được ảnh. Hãy thử ảnh khác.");
+        }
+      }
+
+      $("choose").onclick = () => {
+        if (!busy) $("input").click();
+      };
+
+      $("input").onchange = () => {
+        const file = $("input").files[0];
+        $("input").value = "";
+        if (selected) setInput(selected);
+        acceptFile(file);
+      };
+
+      $("remove").onclick = () => {
+        if (busy) return;
+
+        version++;
+        selected = null;
+        $("input").value = "";
+        $("previewBox").hidden = true;
+        $("preview").removeAttribute("src");
+        $("submit").disabled = true;
+
+        if (objectURL) URL.revokeObjectURL(objectURL);
+        objectURL = null;
+
+        status("Đã xóa ảnh. Chọn ảnh khác để tiếp tục.");
+      };
+
+      // Kéo thả.
+      $("dropzone").ondragover = (event) => {
+        event.preventDefault();
+        if (!busy) $("dropzone").classList.add("active");
+      };
+
+      $("dropzone").ondragleave = () => {
+        $("dropzone").classList.remove("active");
+      };
+
+      $("dropzone").ondrop = (event) => {
+        event.preventDefault();
+        $("dropzone").classList.remove("active");
+
+        const file = Array.from(event.dataTransfer.files).find((item) =>
+          item.type.startsWith("image/"),
+        );
+
+        if (file) acceptFile(file);
+        else status("Hãy kéo một file ảnh vào đây.");
+      };
+
+      window.addEventListener("dragover", (event) => event.preventDefault());
+      window.addEventListener("drop", (event) => event.preventDefault());
+
+      // Ctrl+V hoặc Cmd+V.
+      document.addEventListener("paste", (event) => {
+        if (busy) return;
+
+        const item = Array.from(event.clipboardData?.items || []).find((item) =>
+          item.type.startsWith("image/"),
+        );
+
+        if (item) {
+          event.preventDefault();
+          acceptFile(item.getAsFile());
+        } else {
+          status(
+            "Clipboard chưa có ảnh. Hãy copy ảnh hoặc chụp màn hình trước.",
+          );
+        }
+      });
+
+      // Nút clipboard.
+      $("paste").onclick = async () => {
+        if (busy) return;
+
+        if (!navigator.clipboard?.read) {
+          status("Hãy nhấn Ctrl + V để dán ảnh.");
+          return;
+        }
+
+        $("paste").disabled = true;
+
+        try {
+          const items = await navigator.clipboard.read();
+
+          for (const item of items) {
+            const type = item.types.find((type) => allowed.includes(type));
+            if (!type) continue;
+
+            const blob = await item.getType(type);
+            const ext = type === "image/jpeg" ? "jpg" : type.split("/")[1];
+
+            await acceptFile(new File([blob], `clipboard.${ext}`, { type }));
+            return;
+          }
+
+          status("Không có ảnh trong clipboard.");
+        } catch (error) {
+          status("Chưa đọc được clipboard. Bạn thử nhấn Ctrl + V nhé.");
+        } finally {
+          if (!busy) $("paste").disabled = false;
+        }
+      };
+
+      // Camera.
+      $("openCamera").onclick = async () => {
+        if (busy || cameraOpening) return;
+
+        if (!navigator.mediaDevices?.getUserMedia) {
+          status("Camera cần localhost hoặc HTTPS.");
+          return;
+        }
+
+        cameraOpening = true;
+        $("openCamera").disabled = true;
+        const current = version;
+        stopCamera();
+
+        try {
+          const acquired = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { ideal: "environment" },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+            audio: false,
+          });
+
+          if (busy || current !== version) {
+            acquired.getTracks().forEach((track) => track.stop());
+            return;
+          }
+
+          stream = acquired;
+          $("video").srcObject = stream;
+          $("camera").hidden = false;
+          await $("video").play();
+
+          if (!busy && stream) status("Căn khung hình rồi nhấn Chụp ảnh.");
+        } catch (error) {
+          stopCamera();
+          if (!busy) status("Không mở được camera. Kiểm tra quyền truy cập.");
+        } finally {
+          cameraOpening = false;
+          if (!busy) $("openCamera").disabled = false;
+        }
+      };
+
+      $("closeCamera").onclick = () => {
+        stopCamera();
+        status("Đã tắt camera.");
+      };
+
+      $("capture").onclick = () => {
+        const video = $("video");
+        if (busy || !video.videoWidth) return;
+
+        const current = version;
+        const canvas = $("canvas");
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext("2d").drawImage(video, 0, 0);
+
+        canvas.toBlob(
+          (blob) => {
+            if (busy || current !== version) return;
+
+            if (blob) {
+              acceptFile(
+                new File([blob], "camera.jpg", {
+                  type: "image/jpeg",
+                }),
+              );
+            } else {
+              status("Chưa chụp được ảnh. Hãy thử lại.");
+            }
+          },
+          "image/jpeg",
+          0.95,
+        );
+      };
+
+      // Gửi form đến Django.
+      $("form").onsubmit = (event) => {
+        if (busy || !selected) {
+          event.preventDefault();
+          return;
+        }
+
+        try {
+          setInput(selected);
+        } catch (error) {
+          event.preventDefault();
+          status("Hãy chọn lại ảnh rồi thử gửi.");
+          return;
+        }
+
+        busy = true;
+        version++;
+        stopCamera();
+
+        $("form")
+          .querySelectorAll("button")
+          .forEach((button) => {
+            button.disabled = true;
+          });
+
+        $("submit").textContent = "Đang chờ kết quả...";
+        status(
+          "Đang gửi ảnh và chờ Hugging Face xử lý. Vui lòng giữ trang mở.",
+        );
+      };
+
+      window.addEventListener("pagehide", stopCamera);
+
+      window.addEventListener("pageshow", (event) => {
+        if (!event.persisted) return;
+
+        busy = false;
+
+        $("form")
+          .querySelectorAll("button")
+          .forEach((button) => {
+            button.disabled = false;
+          });
+
+        $("submit").disabled = !selected;
+        $("submit").textContent = "Phân vùng ảnh →";
+
+        status(selected ? "Ảnh đã sẵn sàng." : "Chọn ảnh để bắt đầu.");
+      });
+    </script>
+  </body>
+</html>
